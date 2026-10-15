@@ -105,6 +105,7 @@
     pick a trending sound in Instagram.</p>
   <div class="controls">
     <label>Reel<select id="reelkind">
+      <option value="combo">How the bot works + the week's results (24 s)</option>
       <option value="day">Last night's results</option>
       <option value="week">Last week's results</option>
       <option value="how">How the bot finds an edge</option></select></label>
@@ -495,6 +496,8 @@
 
   // ---------- Reels: 15-second animated videos (canvas + MediaRecorder)
   var REEL_T = 15;
+  var HOW_END = 10.5, COMBO_T = 24.5;   // combo: the how-it-works part, then the week from 10.5 s, end card at 21.5 s
+  function reelLen() { return document.getElementById("reelkind").value === "combo" ? COMBO_T : REEL_T; }
   function ease(t) { t = Math.max(0, Math.min(1, t)); return 1 - Math.pow(1 - t, 3); }
   function seg(t, a, b) { return ease((t - a) / (b - a)); }
   function reelData() {
@@ -527,8 +530,22 @@
   function drawReel(d, t) {
     var c = document.getElementById("reelc"), x = c.getContext("2d"), W = 1080, H = 1920;
     board(x, W, H); brand(x, W, 170);
+    if (d.kind === "combo") {
+      if (t < HOW_END) drawHow(x, W, H, t);
+      else {
+        var w = seg(t, HOW_END, HOW_END + .5);   // a quick wipe into the week
+        drawResults(x, W, H, d, t - HOW_END);
+        if (w < 1) { x.save(); x.globalAlpha = 1 - w; board(x, W, H); brand(x, W, 170); drawHow(x, W, H, HOW_END); x.restore(); }
+      }
+      var cc = seg(t, COMBO_T - 3, COMBO_T - 2.2); if (cc) reelCta(x, W, H, cc);
+      return;
+    }
     if (d.kind === "how") drawHow(x, W, H, t);
-    else {
+    else drawResults(x, W, H, d, t);
+    var ck = seg(t, 12, 12.8); if (ck) reelCta(x, W, H, ck);
+  }
+  function drawResults(x, W, H, d, t) {
+    {
       var s = d.s, neg = s.u < 0;
       // 0-2.2 s: the hook
       var a = seg(t, 0, .7);
@@ -539,7 +556,7 @@
       if (t < 2.4) {
         var b = seg(t, .5, 1.3);
         x.save(); x.globalAlpha = b; x.translate(0, (1 - b) * 60);
-        wrap(x, neg ? "We post every loss too." : "The bot went…", 80, 640, W - 160, 130, "900 130px " + D, C.chalk);
+        wrap(x, neg ? "We post every loss too." : (d.kind === "combo" ? "So how did it do?" : "The bot went…"), 80, 640, W - 160, 130, "900 130px " + D, C.chalk);
         x.restore();
       } else {
         // 2.2-5 s: the number rolls up
@@ -572,7 +589,6 @@
         }
       }
     }
-    var ck = seg(t, 12, 12.8); if (ck) reelCta(x, W, H, ck);
   }
   function drawHow(x, W, H, t) {
     text(x, "HOW THE BOT", 80, 400, "900 120px " + D, C.chalk);
@@ -612,22 +628,25 @@
     var d = reelData(), t0 = performance.now();
     (function step() {
       var t = (performance.now() - t0) / 1000;
-      drawReel(d, Math.min(t, REEL_T)); if (onFrame) onFrame(t);
-      if (t < REEL_T) reelAnim = requestAnimationFrame(step); else { reelAnim = null; if (done) done(); }
+      var T = reelLen();
+      drawReel(d, Math.min(t, T)); if (onFrame) onFrame(t);
+      if (t < T) reelAnim = requestAnimationFrame(step); else { reelAnim = null; if (done) done(); }
     })();
   }
   function reelOptions() {
     var kind = document.getElementById("reelkind").value, sel = document.getElementById("reelday");
     document.getElementById("reeldaywrap").hidden = kind === "how";
-    document.getElementById("reeldaywrap").firstChild.textContent = kind === "week" ? "Week" : "Day";
+    var wk = kind === "week" || kind === "combo";
+    document.getElementById("reeldaywrap").firstChild.textContent = wk ? "Week" : "Day";
     sel.textContent = "";
-    (kind === "week" ? weekEnds().filter(function (e) { return e <= state.days[0]; }) : state.days).forEach(function (v) {
+    (wk ? (kind === "combo" ? weekEnds() : weekEnds().filter(function (e) { return e <= state.days[0]; })) : state.days).forEach(function (v) {
       var o = document.createElement("option"); o.value = v;
-      if (kind === "week") { var m = new Date(v + "T12:00:00"); m.setDate(m.getDate() - 6); o.textContent = niceDay(iso(m)) + " – " + niceDay(v); }
+      if (wk) { var m = new Date(v + "T12:00:00"); m.setDate(m.getDate() - 6); o.textContent = niceDay(iso(m)) + " – " + niceDay(v) + (v > state.days[0] ? " (so far)" : ""); }
       else o.textContent = niceDay(v, true);
       sel.appendChild(o);
     });
-    drawReel(reelData(), 13);
+    if (wk) { var full = weekEnds().filter(function (e) { return e <= state.days[0]; }); if (full.length) sel.value = full[0]; }
+    drawReel(reelData(), kind === "combo" ? 19 : 13);
   }
   function makeVideo() {
     var c = document.getElementById("reelc"), note = document.getElementById("reelnote"), dl = document.getElementById("reeldl");
@@ -644,9 +663,9 @@
       note.textContent = mp4 ? "Done: download it and post it as a Reel." :
         "Done, but this browser saved WebM: Instagram wants MP4, so make it in Chrome or Safari, or convert it.";
     };
-    dl.hidden = true; note.textContent = "Recording… keep this tab open and in front (15 s).";
+    dl.hidden = true; note.textContent = "Recording… keep this tab open and in front (" + reelLen() + " s).";
     rec.start(250);
-    playReel(function (t) { note.textContent = "Recording… " + Math.max(0, Math.ceil(REEL_T - t)) + " s"; },
+    playReel(function (t) { note.textContent = "Recording… " + Math.max(0, Math.ceil(reelLen() - t)) + " s"; },
              function () { setTimeout(function () { rec.stop(); }, 300); });
   }
   window.buffbets_reel = { draw: function (t) { drawReel(reelData(), t); } };   // (for checking frames)
@@ -722,7 +741,7 @@
     state.days.forEach(function (d) { var o = document.createElement("option"); o.value = d; o.textContent = niceDay(d, true); dp.appendChild(o); });
     dayPostShow();
     document.getElementById("reelkind").onchange = reelOptions;
-    document.getElementById("reelday").onchange = function () { drawReel(reelData(), 13); };
+    document.getElementById("reelday").onchange = function () { drawReel(reelData(), reelLen() > 15 ? 19 : 13); };
     document.getElementById("reelplay").onclick = function () { playReel(); };
     document.getElementById("reelrec").onclick = makeVideo;
     reelOptions();
