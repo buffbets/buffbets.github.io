@@ -98,6 +98,24 @@
 
   <h2>Profile picture</h2>
   <div class="row" id="profile"></div>
+
+  <h2>Reels (15-second videos)</h2>
+  <p class="sub">Reels reach people who don't follow you yet. Pick one, press Play to preview, then Make video: it
+    records for 15 seconds (keep this tab open and in front), then Download appears. No music on purpose: when you post,
+    pick a trending sound in Instagram.</p>
+  <div class="controls">
+    <label>Reel<select id="reelkind">
+      <option value="day">Last night's results</option>
+      <option value="week">Last week's results</option>
+      <option value="how">How the bot finds an edge</option></select></label>
+    <label id="reeldaywrap">Day<select id="reelday"></select></label>
+    <button class="dl" type="button" id="reelplay">Play</button>
+    <button class="dl" type="button" id="reelrec">Make video</button>
+    <a class="dl" id="reeldl" hidden style="text-decoration:none">Download video</a>
+    <span class="note" id="reelnote"></span>
+  </div>
+  <div class="row" style="grid-template-columns:minmax(0,340px)"><figure><canvas id="reelc" width="1080" height="1920"></canvas>
+    <figcaption><span>1080×1920 · 15 s</span></figcaption></figure></div>
 </main>
 <script>
 (function () {
@@ -475,6 +493,164 @@
     show("profile", [[c, "buffbets-profile.png", "Instagram crops it to a circle"]]);
   }
 
+  // ---------- Reels: 15-second animated videos (canvas + MediaRecorder)
+  var REEL_T = 15;
+  function ease(t) { t = Math.max(0, Math.min(1, t)); return 1 - Math.pow(1 - t, 3); }
+  function seg(t, a, b) { return ease((t - a) / (b - a)); }
+  function reelData() {
+    var kind = document.getElementById("reelkind").value, pick = document.getElementById("reelday").value;
+    if (kind === "how") return { kind: kind };
+    var bets, label, when;
+    if (kind === "day") {
+      bets = state.bets.filter(function (b) { return b.date === pick; });
+      label = "LAST NIGHT"; when = niceDay(pick, true);
+    } else {
+      var mon = new Date(pick + "T12:00:00"); mon.setDate(mon.getDate() - 6); var start = iso(mon);
+      bets = state.bets.filter(function (b) { return b.date >= start && b.date <= pick; });
+      label = "LAST WEEK"; when = niceDay(start) + " – " + niceDay(pick);
+    }
+    var wins = bets.filter(function (b) { return b.result === "win" && b.type !== "Parlay"; })
+      .sort(function (a, b) { return b.profit - a.profit; }).slice(0, 3);
+    return { kind: kind, s: summary(bets), wins: wins, label: label, when: when };
+  }
+  function reelCta(x, W, H, k) {   // the last 3 seconds: 14 days free
+    x.save(); x.globalAlpha = k;
+    board(x, W, H); brand(x, W, 170);
+    if (bull.complete && bull.naturalWidth) x.drawImage(bull, W / 2 - 300, 1060 + (1 - k) * 200, 600, 724);
+    text(x, "GET EVERY ALERT", W / 2, 470, "800 64px " + D, C.amber, "center");
+    text(x, "14 DAYS FREE", W / 2, 640, "900 190px " + D, C.chalk, "center");
+    rr(x, W / 2 - 260, 720, 520, 130, 12, C.amber);
+    text(x, "LINK IN BIO", W / 2, 810, "900 80px " + D, C.ink, "center");
+    text(x, "21+ · NOT A SPORTSBOOK", W / 2, 940, "600 32px " + M, C.chalk2, "center");
+    x.restore();
+  }
+  function drawReel(d, t) {
+    var c = document.getElementById("reelc"), x = c.getContext("2d"), W = 1080, H = 1920;
+    board(x, W, H); brand(x, W, 170);
+    if (d.kind === "how") drawHow(x, W, H, t);
+    else {
+      var s = d.s, neg = s.u < 0;
+      // 0-2.2 s: the hook
+      var a = seg(t, 0, .7);
+      x.save(); x.globalAlpha = a;
+      text(x, neg ? "THE HONEST NUMBER" : d.label, 80, 380, "800 64px " + D, C.amber);
+      text(x, d.when, 80, 440, "600 36px " + M, C.chalk2);
+      x.restore();
+      if (t < 2.4) {
+        var b = seg(t, .5, 1.3);
+        x.save(); x.globalAlpha = b; x.translate(0, (1 - b) * 60);
+        wrap(x, neg ? "We post every loss too." : "The bot went…", 80, 640, W - 160, 130, "900 130px " + D, C.chalk);
+        x.restore();
+      } else {
+        // 2.2-5 s: the number rolls up
+        var k = seg(t, 2.2, 4.6), v = s.u * k;
+        text(x, units(v), 64, 760, "900 330px " + D, neg ? C.loss : (k >= 1 ? C.amber : C.chalk));
+        // 5-8.5 s: the stat tiles
+        [["RECORD", record(s)], ["RETURN", (s.roi >= 0 ? "+" : "−") + Math.abs(s.roi).toFixed(1) + "%"],
+         ["BEAT THE CLOSE", s.beat === null ? "—" : s.beat + "%"]].forEach(function (st, i) {
+          var e = seg(t, 5 + i * .45, 5.8 + i * .45); if (!e) return;
+          x.save(); x.globalAlpha = e; x.translate((1 - e) * -120, 0);
+          rr(x, 80, 840 + i * 170, W - 160, 145, 12, C.plate);
+          text(x, st[0], 120, 900 + i * 170, "600 32px " + M, C.chalk2);
+          text(x, st[1], W - 120, 945 + i * 170, "900 96px " + D, i === 2 ? C.amber : C.chalk, "right");
+          x.restore();
+        });
+        // 8.5-12 s: the best hits
+        if (t >= 8.5 && d.wins.length) {
+          var pe = seg(t, 8.5, 9.1);
+          x.save(); x.globalAlpha = pe;
+          slipPaper(x, 80, 1370, W - 160, 70 + d.wins.length * 88);
+          text(x, "BEST HITS", 116, 1428, "600 30px " + M, C.muted);
+          d.wins.forEach(function (w, i) {
+            var e = seg(t, 9 + i * .6, 9.5 + i * .6); if (!e) return;
+            x.save(); x.globalAlpha = e;
+            text(x, "✅ " + short(w.bet, 27), 116, 1500 + i * 88, "600 40px " + B, C.ink);
+            text(x, units(w.profit), W - 116, 1500 + i * 88, "600 40px " + M, C.winInk, "right");
+            x.restore();
+          });
+          x.restore();
+        }
+      }
+    }
+    var ck = seg(t, 12, 12.8); if (ck) reelCta(x, W, H, ck);
+  }
+  function drawHow(x, W, H, t) {
+    text(x, "HOW THE BOT", 80, 400, "900 120px " + D, C.chalk);
+    text(x, "FINDS AN EDGE", 80, 520, "900 120px " + D, C.amber);
+    var rows = [["Pinnacle (sharp)", "+131", false], ["DraftKings", "+130", false], ["BetMGM", "+125", false], ["FanDuel", "+148", true]];
+    text(x, "RAMS MONEYLINE", 80, 640, "600 34px " + M, C.chalk2);
+    rows.forEach(function (r, i) {
+      var e = seg(t, 2.2 + i * .5, 2.8 + i * .5); if (!e) return;
+      var hot = r[2] && t > 6.2, y = 700 + i * 120;
+      x.save(); x.globalAlpha = e; x.translate((1 - e) * 100, 0);
+      rr(x, 80, y, W - 160, 100, 10, hot ? C.amber : C.plate);
+      text(x, r[0], 120, y + 66, "700 46px " + B, hot ? C.ink : C.chalk);
+      text(x, r[1], W - 120, y + 68, "600 54px " + M, hot ? C.ink : C.chalk, "right");
+      x.restore();
+    });
+    var f = seg(t, 5.6, 6.4);
+    if (f) { x.save(); x.globalAlpha = f;
+      text(x, "FAIR PRICE  +138  (42% to win)", 80, 1240, "600 44px " + M, C.chalk2); x.restore(); }
+    var g = seg(t, 7.2, 8);
+    if (g) { x.save(); x.globalAlpha = g;
+      text(x, "+148 vs +138", 80, 1370, "900 110px " + D, C.chalk);
+      text(x, "= +4% EDGE", 80, 1480, "900 110px " + D, C.amber); x.restore(); }
+    var n = seg(t, 9, 9.7);
+    if (n) {   // the alert drops in like a notification
+      x.save(); x.translate(0, (1 - n) * -260); x.globalAlpha = n;
+      rr(x, 70, 1560, W - 140, 170, 28, "rgba(244,247,242,.95)");
+      x.save(); x.beginPath(); x.arc(150, 1645, 44, 0, Math.PI * 2); x.clip();
+      if (head.complete && head.naturalWidth) x.drawImage(head, 106, 1601, 88, 88); x.restore();
+      text(x, "BUFF BETS · now", 220, 1620, "600 28px " + M, C.muted);
+      text(x, "📈 +4.0% EV · Rams ML +148 · FanDuel", 220, 1680, "700 38px " + B, C.ink);
+      x.restore();
+    }
+  }
+  var reelAnim = null;
+  function playReel(onFrame, done) {
+    if (reelAnim) cancelAnimationFrame(reelAnim);
+    var d = reelData(), t0 = performance.now();
+    (function step() {
+      var t = (performance.now() - t0) / 1000;
+      drawReel(d, Math.min(t, REEL_T)); if (onFrame) onFrame(t);
+      if (t < REEL_T) reelAnim = requestAnimationFrame(step); else { reelAnim = null; if (done) done(); }
+    })();
+  }
+  function reelOptions() {
+    var kind = document.getElementById("reelkind").value, sel = document.getElementById("reelday");
+    document.getElementById("reeldaywrap").hidden = kind === "how";
+    document.getElementById("reeldaywrap").firstChild.textContent = kind === "week" ? "Week" : "Day";
+    sel.textContent = "";
+    (kind === "week" ? weekEnds().filter(function (e) { return e <= state.days[0]; }) : state.days).forEach(function (v) {
+      var o = document.createElement("option"); o.value = v;
+      if (kind === "week") { var m = new Date(v + "T12:00:00"); m.setDate(m.getDate() - 6); o.textContent = niceDay(iso(m)) + " – " + niceDay(v); }
+      else o.textContent = niceDay(v, true);
+      sel.appendChild(o);
+    });
+    drawReel(reelData(), 13);
+  }
+  function makeVideo() {
+    var c = document.getElementById("reelc"), note = document.getElementById("reelnote"), dl = document.getElementById("reeldl");
+    if (!window.MediaRecorder || !c.captureStream) { note.textContent = "This browser can't record video: use Chrome on a computer."; return; }
+    var types = ["video/mp4;codecs=avc1.42E01E", "video/mp4", "video/webm;codecs=vp9", "video/webm"];
+    var mime = types.filter(function (m) { return MediaRecorder.isTypeSupported(m); })[0] || "";
+    var rec = new MediaRecorder(c.captureStream(30), { mimeType: mime, videoBitsPerSecond: 8000000 }), chunks = [];
+    rec.ondataavailable = function (e) { if (e.data.size) chunks.push(e.data); };
+    rec.onstop = function () {
+      var mp4 = mime.indexOf("mp4") >= 0, blob = new Blob(chunks, { type: mp4 ? "video/mp4" : "video/webm" });
+      if (dl.href) URL.revokeObjectURL(dl.href);
+      dl.href = URL.createObjectURL(blob); dl.download = "buffbets-reel-" + document.getElementById("reelkind").value + (mp4 ? ".mp4" : ".webm");
+      dl.hidden = false;
+      note.textContent = mp4 ? "Done: download it and post it as a Reel." :
+        "Done, but this browser saved WebM: Instagram wants MP4, so make it in Chrome or Safari, or convert it.";
+    };
+    dl.hidden = true; note.textContent = "Recording… keep this tab open and in front (15 s).";
+    rec.start(250);
+    playReel(function (t) { note.textContent = "Recording… " + Math.max(0, Math.ceil(REEL_T - t)) + " s"; },
+             function () { setTimeout(function () { rec.stop(); }, 300); });
+  }
+  window.buffbets_reel = { draw: function (t) { drawReel(reelData(), t); } };   // (for checking frames)
+
   // ---------- data
   function wins() {
     var sel = document.getElementById("win"), day = document.getElementById("day").value;
@@ -545,6 +721,11 @@
     var dp = document.getElementById("dpday");
     state.days.forEach(function (d) { var o = document.createElement("option"); o.value = d; o.textContent = niceDay(d, true); dp.appendChild(o); });
     dayPostShow();
+    document.getElementById("reelkind").onchange = reelOptions;
+    document.getElementById("reelday").onchange = function () { drawReel(reelData(), 13); };
+    document.getElementById("reelplay").onclick = function () { playReel(); };
+    document.getElementById("reelrec").onclick = makeVideo;
+    reelOptions();
   }).catch(function (e) {
     var st = document.getElementById("status"); st.className = "note err";
     st.textContent = "Couldn't load the results (" + e + "). The how-it-works slides, covers and profile picture still work.";
