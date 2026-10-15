@@ -105,7 +105,7 @@
     pick a trending sound in Instagram.</p>
   <div class="controls">
     <label>Reel<select id="reelkind">
-      <option value="combo">How the bot works + the week's results (24 s)</option>
+      <option value="combo">How the bot works + the week's results (26 s)</option>
       <option value="day">Last night's results</option>
       <option value="week">Last week's results</option>
       <option value="how">How the bot finds an edge</option></select></label>
@@ -496,7 +496,7 @@
 
   // ---------- Reels: 15-second animated videos (canvas + MediaRecorder)
   var REEL_T = 15;
-  var HOW_END = 10.5, COMBO_T = 24.5;   // combo: the how-it-works part, then the week from 10.5 s, end card at 21.5 s
+  var HOW_END = 10.5, COMBO_T = 26;   // combo: the how-it-works part, then the week from 10.5 s, end card at 23 s
   function reelLen() { return document.getElementById("reelkind").value === "combo" ? COMBO_T : REEL_T; }
   function ease(t) { t = Math.max(0, Math.min(1, t)); return 1 - Math.pow(1 - t, 3); }
   function seg(t, a, b) { return ease((t - a) / (b - a)); }
