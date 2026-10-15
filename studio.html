@@ -268,7 +268,7 @@
   function hookCard(day, s, best) {
     var W = 1080, H = 1350, c = mk(W, H), x = c.getContext("2d"); board(x, W, H); brand(x, W, 120);
     text(x, niceDay(day, true), W - 80, 138, "600 30px " + M, C.chalk2, "right");
-    if (best && best.profit >= 1.5) {   // a big hit leads
+    if (best && best.profit >= 1.5 && s.u >= 0) {   // a big hit leads (only on a winning night)
       text(x, "LAST NIGHT'S BIGGEST HIT", 80, 300, "800 46px " + D, C.amber);
       var y = wrap(x, best.bet, 76, 420, W - 160, 112, fit(x, best.bet, "900 SIZEpx " + D, 120, (W - 160) * 2), C.chalk);
       text(x, best.odds + " · " + best.book, 80, y + 10, "600 48px " + M, C.chalk2);
@@ -287,16 +287,17 @@
   function dayPost(day) {
     var r = dailyCard(day, "all", "LAST NIGHT"), s = r.s;
     var wins = r.bets.filter(function (b) { return b.result === "win"; }).sort(function (a, b) { return b.profit - a.profit; });
-    var best = wins[0];
+    var best = wins.filter(function (b) { return b.type !== "Parlay"; })[0] || wins[0];
     var slides = [hookCard(day, s, best)];
     if (best) slides.push(slipCard(best));
     slides.push(r.c, ctaSlide("14 DAYS FREE", "Get tonight's alerts before the games. Cancel anytime."));
     var nice = niceDay(day, true).replace(/(\w)(\w+)/g, function (m, a, b) { return a + b.toLowerCase(); });
-    var hook = best && best.profit >= 1.5 ? best.bet + " " + best.odds + " cashed ✅ (" + units(best.profit) + ")"
+    var hook = best && best.profit >= 1.5 && s.u >= 0 ? best.bet + " " + best.odds + " cashed ✅ (" + units(best.profit) + ")"
              : s.u >= 0 ? "Another night in the books 🐂" : "Rough night: " + units(s.u) + ". We post every loss too.";
     var cap = hook + "\n\n" + nice + ": " + units(s.u) + " · " + record(s) +
       (s.beat === null ? "" : " · " + s.beat + "% beat the closing line") + "\n" +
-      (wins.length > 1 ? "Also hit: " + wins.slice(1, 3).map(function (b) { return b.bet + " " + b.odds; }).join(", ") + "\n" : "") +
+      (wins.filter(function (b) { return b.type !== "Parlay"; }).length > 1 ? "Also hit: " +
+        wins.filter(function (b) { return b.type !== "Parlay"; }).slice(1, 3).map(function (b) { return b.bet + " " + b.odds; }).join(", ") + "\n" : "") +
       "\nMembers got these before the games. Tonight's alerts + 14 days free 👉 link in bio\n" +
       "21+ · Info only, not a sportsbook. Bet responsibly.\n#sportsbetting #bettingtips #nhl #nfl #evbetting #propbets";
     return { slides: slides, caption: cap };
