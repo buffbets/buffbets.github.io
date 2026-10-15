@@ -550,22 +550,22 @@
          ["BEAT THE CLOSE", s.beat === null ? "—" : s.beat + "%"]].forEach(function (st, i) {
           var e = seg(t, 5 + i * .45, 5.8 + i * .45); if (!e) return;
           x.save(); x.globalAlpha = e; x.translate((1 - e) * -120, 0);
-          rr(x, 80, 840 + i * 170, W - 160, 145, 12, C.plate);
-          text(x, st[0], 120, 900 + i * 170, "600 32px " + M, C.chalk2);
-          text(x, st[1], W - 120, 945 + i * 170, "900 96px " + D, i === 2 ? C.amber : C.chalk, "right");
+          rr(x, 80, 810 + i * 150, W - 160, 130, 12, C.plate);
+          text(x, st[0], 120, 866 + i * 150, "600 32px " + M, C.chalk2);
+          text(x, st[1], W - 120, 906 + i * 150, "900 90px " + D, i === 2 ? C.amber : C.chalk, "right");
           x.restore();
         });
         // 8.5-12 s: the best hits
         if (t >= 8.5 && d.wins.length) {
           var pe = seg(t, 8.5, 9.1);
           x.save(); x.globalAlpha = pe;
-          slipPaper(x, 80, 1370, W - 160, 70 + d.wins.length * 88);
-          text(x, "BEST HITS", 116, 1428, "600 30px " + M, C.muted);
+          slipPaper(x, 80, 1270, W - 160, 70 + d.wins.length * 80);   // (above where Instagram's caption sits)
+          text(x, "BEST HITS", 116, 1326, "600 30px " + M, C.muted);
           d.wins.forEach(function (w, i) {
             var e = seg(t, 9 + i * .6, 9.5 + i * .6); if (!e) return;
             x.save(); x.globalAlpha = e;
-            text(x, "✅ " + short(w.bet, 27), 116, 1500 + i * 88, "600 40px " + B, C.ink);
-            text(x, units(w.profit), W - 116, 1500 + i * 88, "600 40px " + M, C.winInk, "right");
+            text(x, "✅ " + short(w.bet, 27), 116, 1394 + i * 80, "600 40px " + B, C.ink);
+            text(x, units(w.profit), W - 116, 1394 + i * 80, "600 40px " + M, C.winInk, "right");
             x.restore();
           });
           x.restore();
@@ -581,28 +581,28 @@
     text(x, "RAMS MONEYLINE", 80, 640, "600 34px " + M, C.chalk2);
     rows.forEach(function (r, i) {
       var e = seg(t, 2.2 + i * .5, 2.8 + i * .5); if (!e) return;
-      var hot = r[2] && t > 6.2, y = 700 + i * 120;
+      var hot = r[2] && t > 6.2, y = 680 + i * 108;
       x.save(); x.globalAlpha = e; x.translate((1 - e) * 100, 0);
-      rr(x, 80, y, W - 160, 100, 10, hot ? C.amber : C.plate);
-      text(x, r[0], 120, y + 66, "700 46px " + B, hot ? C.ink : C.chalk);
-      text(x, r[1], W - 120, y + 68, "600 54px " + M, hot ? C.ink : C.chalk, "right");
+      rr(x, 80, y, W - 160, 92, 10, hot ? C.amber : C.plate);
+      text(x, r[0], 120, y + 62, "700 46px " + B, hot ? C.ink : C.chalk);
+      text(x, r[1], W - 120, y + 64, "600 54px " + M, hot ? C.ink : C.chalk, "right");
       x.restore();
     });
     var f = seg(t, 5.6, 6.4);
     if (f) { x.save(); x.globalAlpha = f;
-      text(x, "FAIR PRICE  +138  (42% to win)", 80, 1240, "600 44px " + M, C.chalk2); x.restore(); }
+      text(x, "FAIR PRICE  +138  (42% to win)", 80, 1170, "600 44px " + M, C.chalk2); x.restore(); }
     var g = seg(t, 7.2, 8);
     if (g) { x.save(); x.globalAlpha = g;
-      text(x, "+148 vs +138", 80, 1370, "900 110px " + D, C.chalk);
-      text(x, "= +4% EDGE", 80, 1480, "900 110px " + D, C.amber); x.restore(); }
+      text(x, "+148 vs +138", 80, 1290, "900 110px " + D, C.chalk);
+      text(x, "= +4% EDGE", 80, 1395, "900 110px " + D, C.amber); x.restore(); }
     var n = seg(t, 9, 9.7);
     if (n) {   // the alert drops in like a notification
       x.save(); x.translate(0, (1 - n) * -260); x.globalAlpha = n;
-      rr(x, 70, 1560, W - 140, 170, 28, "rgba(244,247,242,.95)");
-      x.save(); x.beginPath(); x.arc(150, 1645, 44, 0, Math.PI * 2); x.clip();
-      if (head.complete && head.naturalWidth) x.drawImage(head, 106, 1601, 88, 88); x.restore();
-      text(x, "BUFF BETS · now", 220, 1620, "600 28px " + M, C.muted);
-      text(x, "📈 +4.0% EV · Rams ML +148 · FanDuel", 220, 1680, "700 38px " + B, C.ink);
+      rr(x, 70, 1440, W - 140, 170, 28, "rgba(244,247,242,.95)");
+      x.save(); x.beginPath(); x.arc(150, 1525, 44, 0, Math.PI * 2); x.clip();
+      if (head.complete && head.naturalWidth) x.drawImage(head, 106, 1481, 88, 88); x.restore();
+      text(x, "BUFF BETS · now", 220, 1500, "600 28px " + M, C.muted);
+      text(x, "📈 +4.0% EV · Rams ML +148 · FanDuel", 220, 1560, "700 38px " + B, C.ink);
       x.restore();
     }
   }
