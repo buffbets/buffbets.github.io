@@ -62,6 +62,34 @@
   <p class="sub">Four slides for the 7 days ending on the day picked above. Post them together as one carousel.</p>
   <div class="row" id="weekly"></div>
 
+  <h2>Weekly Instagram post (ready to go)</h2>
+  <p class="sub">The whole Monday post: the week's cover, best hits, a card for each day Monday to Sunday, and the
+    14-days-free slide, in posting order, plus the caption. Download all, upload them as one carousel in this order,
+    paste the caption.</p>
+  <div class="controls">
+    <label>Week<select id="weekend"></select></label>
+    <button class="dl" type="button" id="dlall">Download all</button>
+  </div>
+  <div class="row" id="weekpost"></div>
+  <div class="controls" style="flex-direction:column;align-items:stretch;max-width:720px">
+    <label>Caption<textarea id="caption" rows="12" style="font:15px/1.45 Barlow,sans-serif;padding:10px;border-radius:8px;border:1px solid var(--rule);background:var(--card);color:var(--ink)"></textarea></label>
+    <div style="display:flex;gap:10px;align-items:center"><button class="dl" type="button" id="copycap">Copy caption</button>
+      <span class="note" id="capnote"></span></div>
+  </div>
+
+  <h2>Daily Instagram post (ready to go)</h2>
+  <p class="sub">Post every morning. Slide 1 is the hook (the night's biggest hit, or the honest number on a losing
+    night), then the winning slip, the full day, and the 14-days-free slide, plus the caption.</p>
+  <div class="controls">
+    <label>Day<select id="dpday"></select></label>
+    <button class="dl" type="button" id="dpall">Download all</button>
+  </div>
+  <div class="row" id="daypost"></div>
+  <div class="controls" style="flex-direction:column;align-items:stretch;max-width:720px">
+    <label>Caption<textarea id="dpcaption" rows="10" style="font:15px/1.45 Barlow,sans-serif;padding:10px;border-radius:8px;border:1px solid var(--rule);background:var(--card);color:var(--ink)"></textarea></label>
+    <div><button class="dl" type="button" id="dpcopy">Copy caption</button></div>
+  </div>
+
   <h2>How it works (carousel, pin it)</h2>
   <div class="row" id="how"></div>
 
@@ -176,11 +204,17 @@
     return state.bets.filter(function (b) { return b.date === day && (scope === "all" || b.type === scope); });
   }
   function daily() {
-    var day = document.getElementById("day").value, bets = dayBets(), s = summary(bets);
+    var day = document.getElementById("day").value, scope = document.getElementById("scope").value;
+    var r = dailyCard(day, scope, scope === "Prop" ? "PROPS · LAST NIGHT" : "LAST NIGHT");
+    show("daily", [[r.c, "buffbets-" + day + ".png", r.s.n + " bets"]]);
+  }
+  function dailyCard(day, scope, label) {
+    var bets = state.bets.filter(function (b) { return b.date === day && (scope === "all" || b.type === scope); });
+    var s = summary(bets);
     var W = 1080, H = 1350, c = mk(W, H), x = c.getContext("2d");
     board(x, W, H); brand(x, W, 120);
     text(x, niceDay(day, true), W - 80, 138, "600 30px " + M, C.chalk2, "right");
-    text(x, document.getElementById("scope").value === "Prop" ? "PROPS · LAST NIGHT" : "LAST NIGHT", 80, 300, "800 46px " + D, C.amber);
+    text(x, label, 80, 300, "800 46px " + D, C.amber);
     text(x, units(s.u), 72, 520, "900 250px " + D, s.u >= 0 ? C.chalk : C.loss);
     var stats = [["RECORD", record(s)], ["RETURN", (s.roi >= 0 ? "+" : "−") + Math.abs(s.roi).toFixed(1) + "%"],
                  ["BEAT THE CLOSE", s.beat === null ? "—" : s.beat + "%"]];
@@ -200,16 +234,19 @@
       text(x, b.odds + "  " + units(b.profit), W - 112, y, "600 32px " + M, C.winInk, "right");
     });
     footer(x, W, H, "EVERY PICK GRADED · RESULTS IN BIO · 21+ · NOT A SPORTSBOOK");
-    show("daily", [[c, "buffbets-" + day + ".png", s.n + " bets"]]);
+    return { c: c, s: s, bets: bets };
   }
 
   // ---------- slip of the day
   function slip() {
-    var sel = document.getElementById("win"), b = state.bets[+sel.value];
+    var b = state.bets[+document.getElementById("win").value];
+    show("slip", [[slipCard(b), "buffbets-slip" + (b ? "-" + b.date : "") + ".png", b ? b.bet : ""]]);
+  }
+  function slipCard(b) {
     var W = 1080, H = 1350, c = mk(W, H), x = c.getContext("2d");
     board(x, W, H); brand(x, W, 120);
     text(x, "SLIP OF THE DAY", 80, 300, "800 46px " + D, C.amber);
-    if (!b) { text(x, "No winning bets that day.", 80, 400, "600 40px " + B, C.chalk); show("slip", [[c, "buffbets-slip.png", ""]]); return; }
+    if (!b) { text(x, "No winning bets that day.", 80, 400, "600 40px " + B, C.chalk); return c; }
     slipPaper(x, 120, 360, W - 240, 760);
     text(x, "BUFF BETS · " + niceDay(b.date, true), 160, 440, "600 26px " + M, C.muted);
     text(x, b.sport + " · " + short(b.game, 34), 160, 486, "500 28px " + M, C.muted);
@@ -224,12 +261,60 @@
     text(x, "WIN", 0, 22, "900 84px " + D, C.lossInk, "center"); x.restore();
     for (var i = 0; i < 40; i++) { x.fillStyle = C.ink; x.fillRect(160 + i * 9, 1040, (i * 7) % 3 + 2, 44); }
     footer(x, W, H, "GRADED AFTER THE GAME · 21+ · NOT A SPORTSBOOK");
-    show("slip", [[c, "buffbets-slip-" + b.date + ".png", b.bet]]);
+    return c;
+  }
+
+  // ---------- the ready-to-go daily post: hook, winning slip, the full day, 14 days free + caption
+  function hookCard(day, s, best) {
+    var W = 1080, H = 1350, c = mk(W, H), x = c.getContext("2d"); board(x, W, H); brand(x, W, 120);
+    text(x, niceDay(day, true), W - 80, 138, "600 30px " + M, C.chalk2, "right");
+    if (best && best.profit >= 1.5) {   // a big hit leads
+      text(x, "LAST NIGHT'S BIGGEST HIT", 80, 300, "800 46px " + D, C.amber);
+      var y = wrap(x, best.bet, 76, 420, W - 160, 112, fit(x, best.bet, "900 SIZEpx " + D, 120, (W - 160) * 2), C.chalk);
+      text(x, best.odds + " · " + best.book, 80, y + 10, "600 48px " + M, C.chalk2);
+      text(x, units(best.profit), 72, y + 250, "900 230px " + D, C.amber);
+    } else {
+      text(x, s.u >= 0 ? "LAST NIGHT" : "THE HONEST NUMBER", 80, 300, "800 46px " + D, C.amber);
+      text(x, units(s.u), 72, 560, "900 300px " + D, s.u >= 0 ? C.chalk : C.loss);
+      wrap(x, s.u >= 0 ? "Every pick graded. Here's how it went." :
+           "Losing nights happen. We post them too." + (s.beat !== null && s.beat >= 60 ? " " + s.beat + "% still beat the closing line." : ""),
+           80, 680, W - 160, 64, "600 50px " + B, C.chalk);
+    }
+    text(x, "SWIPE →", W - 80, 1180, "800 44px " + D, C.amber, "right");
+    footer(x, W, H, "21+ · INFORMATION ONLY · NOT A SPORTSBOOK");
+    return c;
+  }
+  function dayPost(day) {
+    var r = dailyCard(day, "all", "LAST NIGHT"), s = r.s;
+    var wins = r.bets.filter(function (b) { return b.result === "win"; }).sort(function (a, b) { return b.profit - a.profit; });
+    var best = wins[0];
+    var slides = [hookCard(day, s, best)];
+    if (best) slides.push(slipCard(best));
+    slides.push(r.c, ctaSlide("14 DAYS FREE", "Get tonight's alerts before the games. Cancel anytime."));
+    var nice = niceDay(day, true).replace(/(\w)(\w+)/g, function (m, a, b) { return a + b.toLowerCase(); });
+    var hook = best && best.profit >= 1.5 ? best.bet + " " + best.odds + " cashed ✅ (" + units(best.profit) + ")"
+             : s.u >= 0 ? "Another night in the books 🐂" : "Rough night: " + units(s.u) + ". We post every loss too.";
+    var cap = hook + "\n\n" + nice + ": " + units(s.u) + " · " + record(s) +
+      (s.beat === null ? "" : " · " + s.beat + "% beat the closing line") + "\n" +
+      (wins.length > 1 ? "Also hit: " + wins.slice(1, 3).map(function (b) { return b.bet + " " + b.odds; }).join(", ") + "\n" : "") +
+      "\nMembers got these before the games. Tonight's alerts + 14 days free 👉 link in bio\n" +
+      "21+ · Info only, not a sportsbook. Bet responsibly.\n#sportsbetting #bettingtips #nhl #nfl #evbetting #propbets";
+    return { slides: slides, caption: cap };
+  }
+  function dayPostShow() {
+    var day = document.getElementById("dpday").value; if (!day) return;
+    var p = dayPost(day);
+    show("daypost", p.slides.map(function (c, i) { return [c, "buffbets-" + day + "-" + (i + 1) + ".png", (i + 1) + " of " + p.slides.length]; }));
+    document.getElementById("dpcaption").value = p.caption;
   }
 
   // ---------- weekly carousel
   function weekly() {
-    var end = document.getElementById("day").value, e = new Date(end + "T12:00:00"), st = new Date(e);
+    var w = weekSlides(document.getElementById("day").value);
+    show("weekly", w.slides.map(function (c, i) { return [c, "buffbets-week-" + (i + 1) + ".png", "Slide " + (i + 1)]; }));
+  }
+  function weekSlides(end) {
+    var e = new Date(end + "T12:00:00"), st = new Date(e);
     st.setDate(st.getDate() - 6);
     var start = st.toISOString().slice(0, 10);
     var bets = state.bets.filter(function (b) { return b.date >= start && b.date <= end; }), s = summary(bets);
@@ -281,8 +366,59 @@
     out.push([c, "buffbets-week-3.png", "Slide 3"]);
     // 4: call to action
     out.push([ctaSlide("14 DAYS FREE", "Every alert, the moment it's found. Cancel anytime."), "buffbets-week-4.png", "Slide 4"]);
-    show("weekly", out);
+    return { slides: out.map(function (o) { return o[0]; }), s: s, start: start, end: end, wins: wins };
   }
+
+  // ---------- the ready-to-go Monday post: cover, best hits, Monday..Sunday, 14 days free + caption
+  var WEEKDAYS = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"];
+  function iso(d) { return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+  function weekEnds() {   // the Sunday ending each Monday-to-Sunday week that has bets, newest first
+    var seen = {};
+    state.days.forEach(function (d) {
+      var t = new Date(d + "T12:00:00"); t.setDate(t.getDate() + (7 - t.getDay()) % 7); seen[iso(t)] = 1;
+    });
+    return Object.keys(seen).sort().reverse();
+  }
+  function weekPost(end) {
+    var w = weekSlides(end), slides = [w.slides[0], w.slides[2]], days = [], mon = new Date(end + "T12:00:00");
+    mon.setDate(mon.getDate() - 6);
+    var sumU = 0, sumW = 0, sumL = 0;
+    WEEKDAYS.forEach(function (name, i) {
+      var d = new Date(mon); d.setDate(mon.getDate() + i); var day = iso(d);
+      var r = dailyCard(day, "all", name);
+      if (!r.s.n) { days.push([name.slice(0, 3), null]); return; }
+      slides.push(r.c); days.push([name.slice(0, 3), r.s.u]); sumU += r.s.u; sumW += r.s.w; sumL += r.s.l;
+    });
+    slides.push(w.slides[3]);
+    var best = w.wins[0], s = w.s;
+    var cap = "Week of " + niceDay(w.start).replace(/^(\w)(\w+)/, function (m, a, b) { return a + b.toLowerCase(); }) +
+      "–" + niceDay(end).replace(/^(\w)(\w+)/, function (m, a, b) { return a + b.toLowerCase(); }) + " results 🐂\n" +
+      units(s.u) + " · " + record(s) + " · " + (s.roi >= 0 ? "+" : "−") + Math.abs(s.roi).toFixed(1) + "% return · " +
+      (s.beat === null ? "—" : s.beat + "%") + " beat the closing line\n" +
+      (best ? "Best hit: " + best.bet + " " + best.odds + " (" + units(best.profit) + ")\n" : "") +
+      "\nSwipe for every day of the week 👉\n" +
+      days.map(function (d) { return d[0].charAt(0) + d[0].slice(1).toLowerCase() + " " + (d[1] === null ? "—" : units(d[1])); }).join(" · ") +
+      "\n\nEvery pick graded, wins and losses. Full record + 14 days free 👉 link in bio\n" +
+      "21+ · Info only, not a sportsbook. Bet responsibly.\n#sportsbetting #bettingtips #nhl #nfl #evbetting";
+    var ok = Math.abs(sumU - s.u) < 0.05 && sumW === s.w && sumL === s.l;
+    return { slides: slides, caption: cap, check: ok ? "✅ The days add up to the week." :
+             "⚠️ The days don't add up to the week (" + units(sumU) + " vs " + units(s.u) + "): check before posting." };
+  }
+  function weekPostShow() {
+    var end = document.getElementById("weekend").value; if (!end) return;
+    var p = weekPost(end);
+    show("weekpost", p.slides.map(function (c, i) { return [c, "buffbets-week-of-" + end + "-" + String(i + 1).padStart(2, "0") + ".png", (i + 1) + " of " + p.slides.length]; }));
+    document.getElementById("caption").value = p.caption;
+    document.getElementById("capnote").textContent = p.check;
+  }
+  // For the Monday task: window.buffbets.weekPost("2026-10-18") -> { slides: [PNG data URLs in order], caption, check }
+  window.buffbets = { dayPost: function (day) {
+    var p = dayPost(day || state.days[0]);
+    return { slides: p.slides.map(function (c) { return c.toDataURL("image/png"); }), caption: p.caption };
+  }, weekPost: function (end) {
+    var p = weekPost(end || weekEnds()[0]);
+    return { slides: p.slides.map(function (c) { return c.toDataURL("image/png"); }), caption: p.caption, check: p.check };
+  }, weekEnds: function () { return weekEnds(); } };
   function ctaSlide(big, small) {
     var W = 1080, H = 1350, c = mk(W, H), x = c.getContext("2d"); board(x, W, H); brand(x, W, 120);
     if (bull.complete && bull.naturalWidth) x.drawImage(bull, W - 560, H - 760, 520, 628);
@@ -350,6 +486,28 @@
       });
   }
   function all() { daily(); wins(); slip(); weekly(); }
+  document.getElementById("weekend").onchange = weekPostShow;
+  document.getElementById("dpday").onchange = dayPostShow;
+  document.getElementById("dpall").onclick = function () {
+    var btns = document.querySelectorAll("#daypost button.dl"), i = 0;
+    (function next() { if (i < btns.length) { btns[i++].click(); setTimeout(next, 600); } })();
+  };
+  document.getElementById("dpcopy").onclick = function () {
+    var t = document.getElementById("dpcaption"); t.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(t.value) : Promise.reject()).then(function () {
+      document.getElementById("dpcopy").textContent = "Copied ✓";
+    }, function () { document.execCommand("copy"); });
+  };
+  document.getElementById("dlall").onclick = function () {
+    var btns = document.querySelectorAll("#weekpost button.dl"), i = 0;
+    (function next() { if (i < btns.length) { btns[i++].click(); setTimeout(next, 600); } })();
+  };
+  document.getElementById("copycap").onclick = function () {
+    var t = document.getElementById("caption"); t.select();
+    (navigator.clipboard ? navigator.clipboard.writeText(t.value) : Promise.reject()).then(function () {
+      document.getElementById("copycap").textContent = "Copied ✓";
+    }, function () { document.execCommand("copy"); });
+  };
   document.getElementById("day").onchange = all;
   document.getElementById("scope").onchange = daily;
   document.getElementById("win").onchange = slip;
@@ -373,6 +531,19 @@
     document.getElementById("status").textContent = state.bets.length + " graded bets loaded, updated " +
       new Date(data.updated).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) + ".";
     all();
+    var latest = state.days[0], we = document.getElementById("weekend");
+    weekEnds().forEach(function (end) {
+      var mon = new Date(end + "T12:00:00"); mon.setDate(mon.getDate() - 6);
+      var o = document.createElement("option"); o.value = end;
+      o.textContent = niceDay(iso(mon)) + " – " + niceDay(end) + (end > latest ? " (so far)" : "");
+      we.appendChild(o);
+    });
+    var done = weekEnds().filter(function (e) { return e <= latest; });   // default: the last full week
+    if (done.length) we.value = done[0];
+    weekPostShow();
+    var dp = document.getElementById("dpday");
+    state.days.forEach(function (d) { var o = document.createElement("option"); o.value = d; o.textContent = niceDay(d, true); dp.appendChild(o); });
+    dayPostShow();
   }).catch(function (e) {
     var st = document.getElementById("status"); st.className = "note err";
     st.textContent = "Couldn't load the results (" + e + "). The how-it-works slides, covers and profile picture still work.";
