@@ -98,8 +98,8 @@
     x.fillText(s, px, py);
   }
   function fit(x, s, font, size, max) {   // shrink a headline until it fits
-    while (size > 20) { x.font = font.replace("SIZE", size + "px"); if (x.measureText(s).width <= max) break; size -= 4; }
-    return font.replace("SIZE", size + "px");
+    while (size > 20) { x.font = font.replace("SIZE", size); if (x.measureText(s).width <= max) break; size -= 4; }
+    return font.replace("SIZE", size);
   }
   function wrap(x, s, px, py, max, lh, font, color, align) {
     x.font = font; var words = s.split(" "), line = "", y = py;
