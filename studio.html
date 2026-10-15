@@ -1,0 +1,383 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Buff Bets Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Barlow:wght@500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+  :root { --bg: #E6EAE4; --card: #fff; --ink: #121A16; --muted: #4F5C55; --rule: #C3CBC4; --amber: #F5B21B; --field: #1D4B39; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #0C1511; --card: #13201A; --ink: #E8EEE9; --muted: #9BAAA1; --rule: #26392F; }
+  }
+  :root[data-theme="dark"] { --bg: #0C1511; --card: #13201A; --ink: #E8EEE9; --muted: #9BAAA1; --rule: #26392F; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 Barlow, -apple-system, sans-serif; }
+  main { max-width: 1180px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font: 900 44px/1 "Big Shoulders Display", Impact, sans-serif; margin: 0 0 6px; text-transform: uppercase; }
+  h2 { font: 800 28px/1 "Big Shoulders Display", Impact, sans-serif; margin: 40px 0 6px; text-transform: uppercase; }
+  p.sub { color: var(--muted); margin: 0 0 12px; max-width: 70ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; margin: 8px 0 14px; }
+  label { display: flex; flex-direction: column; gap: 3px; font-size: 13px; color: var(--muted); }
+  select { font: inherit; font-size: 15px; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--rule);
+           background: var(--card); color: var(--ink); min-width: 170px; max-width: 100%; }
+  .row { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 18px; }
+  figure { margin: 0; background: var(--card); border: 1px solid var(--rule); border-radius: 12px; padding: 10px; }
+  canvas { width: 100%; height: auto; display: block; border-radius: 6px; }
+  figcaption { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px;
+               font-size: 13px; color: var(--muted); }
+  button.dl { border: 0; border-radius: 6px; background: var(--amber); color: #121A16; cursor: pointer;
+              font: 800 15px/1 "Big Shoulders Display", Impact, sans-serif; letter-spacing: .04em;
+              text-transform: uppercase; padding: 9px 12px; }
+  .note { color: var(--muted); font-size: 14px; }
+  .err { color: #c8372d; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Buff Bets Studio</h1>
+  <p class="sub">Instagram posts drawn from the live results. Pick a day, then tap Download under each image. On a phone,
+    the image opens: press and hold to save it to Photos. Post sizes are 1080×1350 (feed), 1080×1920 (highlight covers)
+    and 1080×1080 (profile picture).</p>
+  <p class="note" id="status">Loading results…</p>
+
+  <h2>Daily results card</h2>
+  <p class="sub">Post every morning. Shows the day's record, units and how many bets beat the closing line, with the
+    best hits.</p>
+  <div class="controls">
+    <label>Day<select id="day"></select></label>
+    <label>Bets<select id="scope"><option value="all">Every bet</option><option value="Prop">Props only</option></select></label>
+  </div>
+  <div class="row" id="daily"></div>
+
+  <h2>Bet slip of the day</h2>
+  <p class="sub">One winning bet as a graded slip. Only bets that are already graded, never one that can still be placed.</p>
+  <div class="controls"><label>Winning bet<select id="win"></select></label></div>
+  <div class="row" id="slip"></div>
+
+  <h2>Weekly report card (carousel)</h2>
+  <p class="sub">Four slides for the 7 days ending on the day picked above. Post them together as one carousel.</p>
+  <div class="row" id="weekly"></div>
+
+  <h2>How it works (carousel, pin it)</h2>
+  <div class="row" id="how"></div>
+
+  <h2>Highlight covers</h2>
+  <div class="row" id="covers"></div>
+
+  <h2>Profile picture</h2>
+  <div class="row" id="profile"></div>
+</main>
+<script>
+(function () {
+  var RESULTS = "https://joeybuffo10-wq.github.io/ev-bot-results/results.json";
+  var C = { field: "#1D4B39", plate: "#0F2A20", chalk: "#F4F7F2", chalk2: "#C9D6CE", amber: "#F5B21B",
+            ink: "#121A16", slip: "#FBFCF8", muted: "#4F5C55", win: "#3FBF7F", loss: "#FF7A6B",
+            winInk: "#136A40", lossInk: "#B02A23" };
+  var D = '"Big Shoulders Display", Impact, sans-serif', M = '"IBM Plex Mono", Menlo, monospace',
+      B = 'Barlow, "Helvetica Neue", Arial, sans-serif';
+  var head = new Image(), bull = new Image();
+  head.src = "bull-head.webp"; bull.src = "bull.webp";
+  var state = { bets: [], days: [] };
+
+  // ---------- drawing helpers
+  function mk(w, h) { var c = document.createElement("canvas"); c.width = w; c.height = h; return c; }
+  function board(x, w, h) {   // scoreboard green with plank seams
+    x.fillStyle = C.field; x.fillRect(0, 0, w, h);
+    x.fillStyle = "rgba(244,247,242,.05)";
+    for (var i = 119; i < w; i += 120) x.fillRect(i, 0, 1, h);
+    var g = x.createRadialGradient(0, 0, 0, 0, 0, w * .6);
+    g.addColorStop(0, "rgba(244,247,242,.10)"); g.addColorStop(1, "rgba(244,247,242,0)");
+    x.fillStyle = g; x.fillRect(0, 0, w, h);
+  }
+  function text(x, s, px, py, font, color, align) {
+    x.font = font; x.fillStyle = color; x.textAlign = align || "left"; x.textBaseline = "alphabetic";
+    x.fillText(s, px, py);
+  }
+  function fit(x, s, font, size, max) {   // shrink a headline until it fits
+    while (size > 20) { x.font = font.replace("SIZE", size + "px"); if (x.measureText(s).width <= max) break; size -= 4; }
+    return font.replace("SIZE", size + "px");
+  }
+  function wrap(x, s, px, py, max, lh, font, color, align) {
+    x.font = font; var words = s.split(" "), line = "", y = py;
+    words.forEach(function (w) {
+      var t = line ? line + " " + w : w;
+      if (x.measureText(t).width > max && line) { text(x, line, px, y, font, color, align); line = w; y += lh; }
+      else line = t;
+    });
+    if (line) text(x, line, px, y, font, color, align);
+    return y + lh;
+  }
+  function rr(x, px, py, w, h, r, fill) {
+    x.beginPath(); x.moveTo(px + r, py); x.arcTo(px + w, py, px + w, py + h, r); x.arcTo(px + w, py + h, px, py + h, r);
+    x.arcTo(px, py + h, px, py, r); x.arcTo(px, py, px + w, py, r); x.closePath(); x.fillStyle = fill; x.fill();
+  }
+  function slipPaper(x, px, py, w, h) {   // thermal paper with torn top and bottom
+    x.save(); x.shadowColor = "rgba(0,0,0,.35)"; x.shadowBlur = 30; x.shadowOffsetY = 14;
+    x.beginPath(); var n = Math.floor(w / 24);
+    x.moveTo(px, py + 8);
+    for (var i = 0; i < n; i++) x.arc(px + i * 24 + 12, py + 8, 12, Math.PI, 0, true);
+    x.lineTo(px + w, py + h - 8);
+    for (var j = n - 1; j >= 0; j--) x.arc(px + j * 24 + 12, py + h - 8, 12, 0, Math.PI, true);
+    x.closePath(); x.fillStyle = C.slip; x.fill(); x.restore();
+  }
+  function brand(x, w, y, dark) {   // bull head + BUFF BETS
+    x.save(); x.beginPath(); x.arc(110, y, 46, 0, Math.PI * 2); x.fillStyle = C.chalk; x.fill();
+    x.lineWidth = 6; x.strokeStyle = C.amber; x.stroke(); x.clip();
+    if (head.complete && head.naturalWidth) x.drawImage(head, 58, y - 54, 104, 104);
+    x.restore();
+    text(x, "BUFF BETS", 180, y + 18, "900 54px " + D, dark ? C.ink : C.chalk);
+  }
+  function footer(x, w, h, s, color) {
+    text(x, s, w / 2, h - 52, "500 26px " + M, color || C.chalk2, "center");
+  }
+  function units(u) { return (u > 0 ? "+" : u < 0 ? "−" : "") + Math.abs(u).toFixed(1) + "u"; }
+  function niceDay(iso, long) {
+    var d = new Date(iso + "T12:00:00");
+    return d.toLocaleDateString("en-US", long ? { weekday: "short", month: "short", day: "numeric" } : { month: "short", day: "numeric" }).toUpperCase();
+  }
+  function summary(bets) {
+    var w = 0, l = 0, p = 0, u = 0, st = 0, c = [], beat = 0;
+    bets.forEach(function (b) {
+      if (b.result === "win") w++; else if (b.result === "loss") l++; else p++;
+      u += b.profit; if (b.result !== "push") st += b.units;
+      if (b.clv !== null && b.clv !== undefined) { c.push(b.clv); if (b.clv > 0) beat++; }
+    });
+    return { w: w, l: l, p: p, u: u, roi: st ? u / st * 100 : 0, n: bets.length,
+             beat: c.length ? Math.round(beat / c.length * 100) : null };
+  }
+  function record(s) { return s.w + "-" + s.l + (s.p ? "-" + s.p : ""); }
+  function short(s, n) { return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+
+  function show(boxId, items) {   // items: [[canvas, file name, caption]]
+    var box = document.getElementById(boxId); box.textContent = "";
+    items.forEach(function (it) {
+      var f = document.createElement("figure"); f.appendChild(it[0]);
+      var cap = document.createElement("figcaption"), t = document.createElement("span");
+      t.textContent = it[2] || ""; cap.appendChild(t);
+      var b = document.createElement("button"); b.className = "dl"; b.type = "button"; b.textContent = "Download";
+      b.onclick = function () {
+        it[0].toBlob(function (blob) {
+          var a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = it[1];
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+        }, "image/png");
+      };
+      cap.appendChild(b); f.appendChild(cap); box.appendChild(f);
+    });
+  }
+
+  // ---------- daily results card
+  function dayBets() {
+    var day = document.getElementById("day").value, scope = document.getElementById("scope").value;
+    return state.bets.filter(function (b) { return b.date === day && (scope === "all" || b.type === scope); });
+  }
+  function daily() {
+    var day = document.getElementById("day").value, bets = dayBets(), s = summary(bets);
+    var W = 1080, H = 1350, c = mk(W, H), x = c.getContext("2d");
+    board(x, W, H); brand(x, W, 120);
+    text(x, niceDay(day, true), W - 80, 138, "600 30px " + M, C.chalk2, "right");
+    text(x, document.getElementById("scope").value === "Prop" ? "PROPS · LAST NIGHT" : "LAST NIGHT", 80, 300, "800 46px " + D, C.amber);
+    text(x, units(s.u), 72, 520, "900 250px " + D, s.u >= 0 ? C.chalk : C.loss);
+    var stats = [["RECORD", record(s)], ["RETURN", (s.roi >= 0 ? "+" : "−") + Math.abs(s.roi).toFixed(1) + "%"],
+                 ["BEAT THE CLOSE", s.beat === null ? "—" : s.beat + "%"]];
+    stats.forEach(function (st, i) {
+      var px = 80 + i * 320;
+      rr(x, px, 580, 296, 150, 10, C.plate);
+      text(x, st[0], px + 24, 628, "600 24px " + M, C.chalk2);
+      text(x, st[1], px + 24, 702, "900 64px " + D, i === 2 ? C.amber : C.chalk);
+    });
+    var wins = bets.filter(function (b) { return b.result === "win"; }).sort(function (a, b) { return b.profit - a.profit; }).slice(0, 4);
+    slipPaper(x, 80, 780, W - 160, 90 + Math.max(1, wins.length) * 74);
+    text(x, "BEST HITS", 112, 846, "600 26px " + M, C.muted);
+    if (!wins.length) text(x, "No winners this time. Every pick still counts.", 112, 912, "500 32px " + B, C.ink);
+    wins.forEach(function (b, i) {
+      var y = 912 + i * 74;
+      text(x, "✅ " + short(b.bet, 30), 112, y, "600 34px " + B, C.ink);
+      text(x, b.odds + "  " + units(b.profit), W - 112, y, "600 32px " + M, C.winInk, "right");
+    });
+    footer(x, W, H, "EVERY PICK GRADED · RESULTS IN BIO · 21+ · NOT A SPORTSBOOK");
+    show("daily", [[c, "buffbets-" + day + ".png", s.n + " bets"]]);
+  }
+
+  // ---------- slip of the day
+  function slip() {
+    var sel = document.getElementById("win"), b = state.bets[+sel.value];
+    var W = 1080, H = 1350, c = mk(W, H), x = c.getContext("2d");
+    board(x, W, H); brand(x, W, 120);
+    text(x, "SLIP OF THE DAY", 80, 300, "800 46px " + D, C.amber);
+    if (!b) { text(x, "No winning bets that day.", 80, 400, "600 40px " + B, C.chalk); show("slip", [[c, "buffbets-slip.png", ""]]); return; }
+    slipPaper(x, 120, 360, W - 240, 760);
+    text(x, "BUFF BETS · " + niceDay(b.date, true), 160, 440, "600 26px " + M, C.muted);
+    text(x, b.sport + " · " + short(b.game, 34), 160, 486, "500 28px " + M, C.muted);
+    x.fillStyle = "rgba(18,26,22,.25)"; x.fillRect(160, 512, W - 320, 2);
+    var y = wrap(x, b.bet, 160, 600, W - 320, 74, fit(x, b.bet, "900 SIZEpx " + D, 72, (W - 320) * 1.9), C.ink);
+    text(x, b.odds + " · " + b.book, 160, y + 20, "600 44px " + M, C.ink);
+    text(x, "STAKE " + b.units.toFixed(1) + "u", 160, y + 92, "500 32px " + M, C.muted);
+    text(x, "PAID " + units(b.profit), 160, y + 146, "600 40px " + M, C.winInk);
+    if (b.clv !== null && b.clv !== undefined && b.clv > 0) text(x, "BEAT THE CLOSE", 160, y + 196, "600 28px " + M, C.winInk);
+    x.save(); x.translate(W - 290, 1000); x.rotate(-0.14);
+    x.strokeStyle = C.lossInk; x.lineWidth = 8; x.strokeRect(-120, -60, 240, 110);
+    text(x, "WIN", 0, 22, "900 84px " + D, C.lossInk, "center"); x.restore();
+    for (var i = 0; i < 40; i++) { x.fillStyle = C.ink; x.fillRect(160 + i * 9, 1040, (i * 7) % 3 + 2, 44); }
+    footer(x, W, H, "GRADED AFTER THE GAME · 21+ · NOT A SPORTSBOOK");
+    show("slip", [[c, "buffbets-slip-" + b.date + ".png", b.bet]]);
+  }
+
+  // ---------- weekly carousel
+  function weekly() {
+    var end = document.getElementById("day").value, e = new Date(end + "T12:00:00"), st = new Date(e);
+    st.setDate(st.getDate() - 6);
+    var start = st.toISOString().slice(0, 10);
+    var bets = state.bets.filter(function (b) { return b.date >= start && b.date <= end; }), s = summary(bets);
+    var span = niceDay(start) + " – " + niceDay(end), out = [], W = 1080, H = 1350;
+    // 1: the week
+    var c = mk(W, H), x = c.getContext("2d"); board(x, W, H); brand(x, W, 120);
+    text(x, "WEEKLY REPORT CARD", 80, 300, "800 46px " + D, C.amber);
+    text(x, span, 80, 360, "600 32px " + M, C.chalk2);
+    text(x, units(s.u), 72, 600, "900 260px " + D, s.u >= 0 ? C.chalk : C.loss);
+    [["RECORD", record(s)], ["RETURN", (s.roi >= 0 ? "+" : "−") + Math.abs(s.roi).toFixed(1) + "%"],
+     ["BEAT THE CLOSE", s.beat === null ? "—" : s.beat + "%"], ["BETS", String(s.n)]].forEach(function (v, i) {
+      var px = 80 + (i % 2) * 470, py = 680 + Math.floor(i / 2) * 190;
+      rr(x, px, py, 450, 160, 10, C.plate);
+      text(x, v[0], px + 28, py + 52, "600 26px " + M, C.chalk2);
+      text(x, v[1], px + 28, py + 128, "900 72px " + D, i === 2 ? C.amber : C.chalk);
+    });
+    text(x, "SWIPE →", W - 80, 1180, "800 40px " + D, C.amber, "right");
+    footer(x, W, H, "EVERY PICK GRADED · 21+ · NOT A SPORTSBOOK");
+    out.push([c, "buffbets-week-1.png", "Slide 1"]);
+    // 2: by sport
+    c = mk(W, H); x = c.getContext("2d"); board(x, W, H); brand(x, W, 120);
+    text(x, "BY SPORT", 80, 300, "800 46px " + D, C.amber); text(x, span, 80, 360, "600 32px " + M, C.chalk2);
+    var g = {}; bets.forEach(function (b) { (g[b.sport] = g[b.sport] || []).push(b); });
+    var names = Object.keys(g).sort(function (a, b) { return summary(g[b]).u - summary(g[a]).u; }).slice(0, 7);
+    text(x, "RECORD", 560, 450, "600 24px " + M, C.chalk2, "right"); text(x, "UNITS", 780, 450, "600 24px " + M, C.chalk2, "right");
+    text(x, "BEAT CLOSE", 1000, 450, "600 24px " + M, C.chalk2, "right");
+    names.forEach(function (n, i) {
+      var t = summary(g[n]), y = 540 + i * 100;
+      rr(x, 80, y - 64, 920, 86, 8, i % 2 ? "rgba(15,42,32,.55)" : C.plate);
+      text(x, n.toUpperCase(), 110, y, "900 54px " + D, C.chalk);
+      text(x, record(t), 560, y, "600 34px " + M, C.chalk, "right");
+      text(x, units(t.u), 780, y, "600 34px " + M, t.u >= 0 ? C.win : C.loss, "right");
+      text(x, t.beat === null ? "—" : t.beat + "%", 990, y, "600 34px " + M, C.amber, "right");
+    });
+    footer(x, W, H, "UNITS AT THE STAKE EACH ALERT SHOWED");
+    out.push([c, "buffbets-week-2.png", "Slide 2"]);
+    // 3: best hits
+    c = mk(W, H); x = c.getContext("2d"); board(x, W, H); brand(x, W, 120);
+    text(x, "BEST HITS", 80, 300, "800 46px " + D, C.amber); text(x, span, 80, 360, "600 32px " + M, C.chalk2);
+    var wins = bets.filter(function (b) { return b.result === "win"; }).sort(function (a, b) { return b.profit - a.profit; }).slice(0, 6);
+    slipPaper(x, 80, 410, W - 160, 110 + Math.max(1, wins.length) * 112);
+    wins.forEach(function (b, i) {
+      var y = 500 + i * 112;
+      text(x, "✅ " + short(b.bet, 32), 116, y, "600 36px " + B, C.ink);
+      text(x, b.sport + " · " + b.odds + " · " + b.book, 160, y + 42, "500 26px " + M, C.muted);
+      text(x, units(b.profit), W - 116, y, "600 36px " + M, C.winInk, "right");
+    });
+    footer(x, W, H, "GRADED AFTER THE GAMES · 21+ · NOT A SPORTSBOOK");
+    out.push([c, "buffbets-week-3.png", "Slide 3"]);
+    // 4: call to action
+    out.push([ctaSlide("14 DAYS FREE", "Every alert, the moment it's found. Cancel anytime."), "buffbets-week-4.png", "Slide 4"]);
+    show("weekly", out);
+  }
+  function ctaSlide(big, small) {
+    var W = 1080, H = 1350, c = mk(W, H), x = c.getContext("2d"); board(x, W, H); brand(x, W, 120);
+    if (bull.complete && bull.naturalWidth) x.drawImage(bull, W - 560, H - 760, 520, 628);
+    text(x, "GET EVERY ALERT", 80, 330, "800 50px " + D, C.amber);
+    text(x, big, 72, 520, fit(x, big, "900 SIZEpx " + D, 200, W - 150), C.chalk);
+    wrap(x, small, 80, 610, 520, 52, "600 40px " + B, C.chalk);
+    rr(x, 80, 790, 380, 110, 8, C.amber);
+    text(x, "LINK IN BIO", 270, 866, "900 58px " + D, C.ink, "center");
+    footer(x, W, H, "21+ · INFORMATION ONLY · NOT A SPORTSBOOK");
+    return c;
+  }
+
+  // ---------- how it works
+  function how() {
+    var slides = [
+      ["HOW BUFF BETS WORKS", "Your phone buzzes when a sportsbook pays too much.", "SWIPE →"],
+      ["1 · BOOKS MISPRICE BETS", "Every book sets its own odds. Sometimes FanDuel, DraftKings, BetMGM, Caesars or Kalshi pays more than a bet is really worth.", ""],
+      ["2 · THE BOT FINDS THE FAIR PRICE", "It reads 10 books all day, takes the cut out of Pinnacle's sharp line, and works out what each bet is really worth.", ""],
+      ["3 · YOU GET PINGED", "When your book pays more than fair, the alert lands in Discord: the bet, the odds, the book and exactly how much to stake.", ""],
+      ["4 · EVERY PICK IS GRADED", "Wins and losses, posted every night with the full public record. Beating the closing line is how we keep score.", ""]
+    ], out = [];
+    slides.forEach(function (sl, i) {
+      var W = 1080, H = 1350, c = mk(W, H), x = c.getContext("2d"); board(x, W, H); brand(x, W, 120);
+      if (i === 0 && bull.complete && bull.naturalWidth) x.drawImage(bull, W - 600, H - 800, 560, 676);
+      text(x, sl[0], 80, 330, fit(x, sl[0], "900 SIZEpx " + D, 96, W - 160), C.amber);
+      wrap(x, sl[1], 80, i === 0 ? 470 : 470, i === 0 ? 560 : W - 160, i === 0 ? 92 : 70, (i === 0 ? "900 86px " + D : "600 50px " + B), C.chalk);
+      if (sl[2]) text(x, sl[2], 80, 1180, "800 44px " + D, C.amber);
+      footer(x, W, H, i === 4 ? "14 DAYS FREE · LINK IN BIO · 21+" : "21+ · INFORMATION ONLY · NOT A SPORTSBOOK");
+      out.push([c, "buffbets-how-" + (i + 1) + ".png", "Slide " + (i + 1)]);
+    });
+    out.push([ctaSlide("14 DAYS FREE", "Then $45 a month. Cancel anytime."), "buffbets-how-6.png", "Slide 6"]);
+    show("how", out);
+  }
+
+  // ---------- highlight covers and profile picture
+  function covers() {
+    var list = [["🐂", "START"], ["📊", "RESULTS"], ["🔔", "ALERTS"], ["💎", "ELITE"], ["❓", "FAQ"], ["🎁", "REFER"]], out = [];
+    list.forEach(function (it) {
+      var W = 1080, H = 1920, c = mk(W, H), x = c.getContext("2d"); board(x, W, H);
+      x.beginPath(); x.arc(W / 2, H / 2, 330, 0, Math.PI * 2); x.fillStyle = C.amber; x.fill();
+      text(x, it[0], W / 2, H / 2 + 110, "300px serif", C.ink, "center");
+      text(x, it[1], W / 2, H / 2 + 470, "900 90px " + D, C.chalk, "center");
+      out.push([c, "highlight-" + it[1].toLowerCase() + ".png", it[1]]);
+    });
+    show("covers", out);
+    var W = 1080, c = mk(W, W), x = c.getContext("2d");
+    x.fillStyle = C.amber; x.fillRect(0, 0, W, W);
+    x.beginPath(); x.arc(W / 2, W / 2, 470, 0, Math.PI * 2); x.fillStyle = C.field; x.fill();
+    if (bull.complete && bull.naturalWidth) {
+      x.save(); x.beginPath(); x.arc(W / 2, W / 2, 470, 0, Math.PI * 2); x.clip();
+      x.drawImage(bull, W / 2 - 430, 120, 860, 1038); x.restore();
+    }
+    show("profile", [[c, "buffbets-profile.png", "Instagram crops it to a circle"]]);
+  }
+
+  // ---------- data
+  function wins() {
+    var sel = document.getElementById("win"), day = document.getElementById("day").value;
+    sel.textContent = "";
+    state.bets.forEach(function (b, i) { b._i = i; });
+    state.bets.filter(function (b) { return b.date === day && b.result === "win"; })
+      .sort(function (a, b) { return b.profit - a.profit; }).forEach(function (b) {
+        var o = document.createElement("option"); o.value = b._i;
+        o.textContent = short(b.bet, 40) + " " + b.odds + " (" + units(b.profit) + ")"; sel.appendChild(o);
+      });
+  }
+  function all() { daily(); wins(); slip(); weekly(); }
+  document.getElementById("day").onchange = all;
+  document.getElementById("scope").onchange = daily;
+  document.getElementById("win").onchange = slip;
+
+  var fonts = Promise.all(['900 100px "Big Shoulders Display"', '800 100px "Big Shoulders Display"', '600 40px "IBM Plex Mono"',
+                           '500 40px "IBM Plex Mono"', '600 40px Barlow', '500 40px Barlow'].map(function (f) {
+    return document.fonts.load(f).catch(function () {});
+  }));
+  var imgs = Promise.all([head, bull].map(function (im) {
+    return new Promise(function (ok) { if (im.complete) ok(); else { im.onload = ok; im.onerror = ok; } });
+  }));
+  Promise.all([fonts, imgs]).then(function () {
+    how(); covers();
+    return fetch(RESULTS + "?t=" + Date.now(), { cache: "no-store" }).then(function (r) { return r.json(); });
+  }).then(function (data) {
+    state.bets = data.bets || [];
+    var days = {}; state.bets.forEach(function (b) { days[b.date] = 1; });
+    state.days = Object.keys(days).sort().reverse();
+    var sel = document.getElementById("day");
+    state.days.forEach(function (d) { var o = document.createElement("option"); o.value = d; o.textContent = niceDay(d, true); sel.appendChild(o); });
+    document.getElementById("status").textContent = state.bets.length + " graded bets loaded, updated " +
+      new Date(data.updated).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) + ".";
+    all();
+  }).catch(function (e) {
+    var st = document.getElementById("status"); st.className = "note err";
+    st.textContent = "Couldn't load the results (" + e + "). The how-it-works slides, covers and profile picture still work.";
+  });
+})();
+</script>
+</body>
+</html>
